@@ -77,8 +77,7 @@ docker run -d \
 ```bash
 docker ps
 ```
-
-Tu dois voir :
+Résultat:
 
 | Nom | Image | Port |
 |---|---|---|
