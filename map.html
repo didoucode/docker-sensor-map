@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Capteurs de Trafic</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    :root {
+      --bg: #f5f5f7;
+      --card: #ffffff;
+      --accent: #e63946;
+      --accent2: #ff6b6b;
+      --text: #1a1a2e;
+      --muted: #8e8ea0;
+      --border: rgba(0,0,0,0.07);
+      --shadow: 0 4px 20px rgba(0,0,0,0.08);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    body::before {
+      content: '';
+      display: block;
+      height: 4px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      flex-shrink: 0;
+    }
+
+    header {
+      background: #fff;
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      box-shadow: var(--shadow);
+      z-index: 1000;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(230,57,70,0.08);
+      border: 1px solid rgba(230,57,70,0.2);
+      border-radius: 100px;
+      padding: 4px 14px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--accent);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1 { font-size: 18px; font-weight: 700; color: var(--text); }
+    h1 span {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .stats { display: flex; gap: 20px; align-items: center; }
+
+    .stat {
+      text-align: center;
+      padding: 4px 16px;
+      background: var(--bg);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+    .stat-value { font-size: 16px; font-weight: 700; color: var(--text); }
+    .stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+
+    .filters {
+      background: #fff;
+      border-bottom: 1px solid var(--border);
+      padding: 8px 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    .filter-label { font-size: 12px; color: var(--muted); font-weight: 500; }
+
+    .filter-btn {
+      padding: 4px 14px;
+      border-radius: 100px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'DM Sans', sans-serif;
+    }
+    .filter-btn:hover, .filter-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    #map { flex: 1; width: 100%; z-index: 1; }
+
+    .leaflet-popup-content-wrapper {
+      border-radius: 12px !important;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.15) !important;
+      border: none !important;
+      padding: 0 !important;
+      overflow: hidden;
+    }
+    .leaflet-popup-content { margin: 0 !important; width: 220px !important; }
+    .leaflet-popup-tip-container { display: none; }
+
+    .popup-header {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      padding: 12px 16px;
+      color: #fff;
+    }
+    .popup-header .popup-id { font-size: 11px; opacity: 0.8; letter-spacing: 0.06em; text-transform: uppercase; }
+    .popup-header .popup-freeway { font-size: 18px; font-weight: 700; }
+
+    .popup-body { padding: 12px 16px; background: #fff; }
+    .popup-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 0;
+      border-bottom: 1px solid #f0f0f5;
+      font-size: 12px;
+    }
+    .popup-row:last-child { border-bottom: none; }
+    .popup-row .key { color: var(--muted); }
+    .popup-row .val { font-weight: 600; color: var(--text); }
+
+    #loading {
+      position: fixed; inset: 0;
+      background: rgba(245,245,247,0.95);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 9999; gap: 16px;
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid rgba(230,57,70,0.15);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading p { color: var(--muted); font-size: 14px; }
+
+    #error {
+      display: none;
+      position: fixed; inset: 0;
+      background: var(--bg);
+      align-items: center; justify-content: center;
+      flex-direction: column; gap: 12px; z-index: 9999;
+      text-align: center; padding: 40px;
+    }
+    #error h2 { color: var(--accent); font-size: 22px; }
+    #error p  { color: var(--muted); font-size: 13px; }
+    #error code {
+      background: #fff;
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-size: 13px;
+      display: block;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <p id="loading-msg">Chargement des capteurs…</p>
+</div>
+
+<div id="error">
+  <h2>❌ Impossible de charger</h2>
+  <p>Assure-toi que le serveur tourne et que les données sont importées.</p>
+  <code>http://localhost:3001/import → puis recharge la page</code>
+</div>
+
+<header>
+  <div class="header-left">
+    <div class="logo-badge">📡 Traffic Sensors</div>
+    <h1>Carte des <span>capteurs</span></h1>
+  </div>
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-value" id="stat-total">—</div>
+      <div class="stat-label">Capteurs</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="stat-freeways">—</div>
+      <div class="stat-label">Autoroutes</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="stat-visible">—</div>
+      <div class="stat-label">Visibles</div>
+    </div>
+  </div>
+</header>
+
+<div class="filters" id="filters">
+  <span class="filter-label">Autoroute :</span>
+  <button class="filter-btn active" data-freeway="ALL">Toutes</button>
+</div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const map = L.map('map', { zoomControl: true }).setView([37.35, -121.95], 11);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 19
+  }).addTo(map);
+
+  function redIcon() {
+    return L.divIcon({
+      className: '',
+      html: `<div style="
+        width:12px; height:12px;
+        background: #e63946;
+        border: 2px solid #fff;
+        border-radius: 50%;
+        box-shadow: 0 2px 6px rgba(230,57,70,0.6);
+        cursor: pointer;
+      "></div>`,
+      iconSize: [12, 12],
+      iconAnchor: [6, 6]
+    });
+  }
+
+  function redIconActive() {
+    return L.divIcon({
+      className: '',
+      html: `<div style="
+        width:16px; height:16px;
+        background: #e63946;
+        border: 2px solid #fff;
+        border-radius: 50%;
+        box-shadow: 0 0 0 4px rgba(230,57,70,0.3);
+        cursor: pointer;
+      "></div>`,
+      iconSize: [16, 16],
+      iconAnchor: [8, 8]
+    });
+  }
+
+  let allSensors = [];
+  let markers    = [];
+
+  function buildPopup(s) {
+    return `
+      <div class="popup-header">
+        <div class="popup-id">Capteur #${s.sensorId}</div>
+        <div class="popup-freeway">Hwy ${s.freeway} ${s.direction}</div>
+      </div>
+      <div class="popup-body">
+        <div class="popup-row"><span class="key">Postmile</span><span class="val">${s.postmile} mi</span></div>
+        <div class="popup-row"><span class="key">Latitude</span><span class="val">${s.latitude}</span></div>
+        <div class="popup-row"><span class="key">Longitude</span><span class="val">${s.longitude}</span></div>
+        <div class="popup-row"><span class="key">Longueur</span><span class="val">${s.length} km</span></div>
+        <div class="popup-row"><span class="key">Voies</span><span class="val">${s.lanes}</span></div>
+      </div>
+    `;
+  }
+
+  function renderMarkers(sensors) {
+    markers.forEach(m => map.removeLayer(m));
+    markers = [];
+
+    sensors.forEach(s => {
+      const m = L.marker([s.latitude, s.longitude], { icon: redIcon() })
+        .addTo(map)
+        .bindPopup(buildPopup(s), { maxWidth: 220 });
+
+      m.on('mouseover', () => m.setIcon(redIconActive()));
+      m.on('mouseout',  () => m.setIcon(redIcon()));
+      markers.push(m);
+    });
+
+    document.getElementById('stat-visible').textContent = sensors.length;
+  }
+
+  function buildFilters(sensors) {
+    const freeways = [...new Set(sensors.map(s => s.freeway))].sort((a, b) => a - b);
+    document.getElementById('stat-freeways').textContent = freeways.length;
+
+    const bar = document.getElementById('filters');
+    freeways.forEach(fw => {
+      const btn = document.createElement('button');
+      btn.className = 'filter-btn';
+      btn.dataset.freeway = fw;
+      btn.textContent = `Hwy ${fw}`;
+      bar.appendChild(btn);
+    });
+
+    bar.addEventListener('click', e => {
+      const btn = e.target.closest('.filter-btn');
+      if (!btn) return;
+      bar.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      const filtered = btn.dataset.freeway === 'ALL'
+        ? allSensors
+        : allSensors.filter(s => s.freeway === btn.dataset.freeway);
+
+      renderMarkers(filtered);
+    });
+  }
+
+  async function load() {
+    try {
+      document.getElementById('loading-msg').textContent = 'Connexion au serveur…';
+
+      // ✅ URLs relatives — fonctionne peu importe le port
+      let res = await fetch('/sensors');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+
+      allSensors = await res.json();
+
+      if (allSensors.length === 0) {
+        document.getElementById('loading-msg').textContent = 'Import des données CSV…';
+        await fetch('/import');
+        res = await fetch('/sensors');
+        allSensors = await res.json();
+      }
+
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('stat-total').textContent = allSensors.length;
+
+      buildFilters(allSensors);
+      renderMarkers(allSensors);
+
+      if (allSensors.length > 0) {
+        const bounds = L.latLngBounds(allSensors.map(s => [s.latitude, s.longitude]));
+        map.fitBounds(bounds, { padding: [40, 40] });
+      }
+
+    } catch (e) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('error').style.display   = 'flex';
+      console.error(e);
+    }
+  }
+
+  load();
+</script>
+</body>
+</html>
